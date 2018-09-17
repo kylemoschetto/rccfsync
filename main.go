@@ -3,6 +3,7 @@ package main
 import (
 	// GoLang packages
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -20,6 +21,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
+
+type configuration struct {
+	Key    string
+	Secret string
+}
 
 func checkError(err error) {
 	if err != nil {
@@ -40,8 +46,8 @@ func main() {
 	checkError(err)
 
 	// Open the actual spreadsheet and grab values
-	spreadsheetID := "" // you need to grab this from the file
-	readRange := "Dashboard!A1:B22"
+	spreadsheetID := "102EkmTDD9m0shJdlQJA4JpCjHpDs63C2sE2Q_bgbfhk" // you need to grab this from the file
+	readRange := "Dashboard!A1:C150"
 	resp, err := srv.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
 	checkError(err)
 
@@ -58,21 +64,40 @@ func main() {
 		fmt.Println("No data found in the sheet.")
 	} else {
 		fmt.Println("Found data and printing to file")
+		fmt.Fprintf(file, "<html><head><link rel='stylesheet' type='text/css' href='rccf.css'></head><body>")
 		for _, row := range resp.Values {
 			if len(row) == 0 {
-				//fmt.Println("No data found in this row.")
-			} else {
-				//fmt.Printf("%s, %s\n", row[0], row[1])
-				fmt.Fprintf(file, "%s, %s\n", row[0], row[1])
+				// fmt.Println("No data found in this row.")
+			} else if len(row) == 2 {
+				fmt.Fprintf(file, "<p>%s, %s</p>\n", row[0], row[1])
+			} else if len(row) == 3 {
+				fmt.Fprintf(file, "<p class='%s'>%s, %s</p>\n", row[2], row[0], row[1])
 			}
 		}
 	}
+	fmt.Fprintf(file, "</body></html>")
 
-	// Send data to S3
-	aws_access_key_id := ""     // you need to grab this from the file
-	aws_secret_access_key := "" // you need to grab this from the file
+	/*
+		// Send data to S3
+	*/
+
+	// Grab keys
+	data2, err := os.Open("aws.secret.json")
+	decoder := json.NewDecoder(data2)
+	configuration := configuration{}
+	decoder.Decode(&configuration)
+	defer data2.Close()
+	checkError(err)
+	fmt.Println("Opened the aws file successfully")
+
+	awsAccessKeyID := configuration.Key        // you need to grab this from the file
+	awsSecretAccessKey := configuration.Secret // you need to grab this from the file
+	// fmt.Println("Key from file: ", awsAccessKeyID)
+	// fmt.Println("Secret from file: ", awsSecretAccessKey)
+	// fmt.Println("configuration file string: ", configuration)
+	// fmt.Println("decoder file string: ", decoder)
 	token := ""
-	creds := credentials.NewStaticCredentials(aws_access_key_id, aws_secret_access_key, token)
+	creds := credentials.NewStaticCredentials(awsAccessKeyID, awsSecretAccessKey, token)
 	_, err = creds.Get()
 	checkError(err)
 	if err != nil {
@@ -114,6 +139,6 @@ func main() {
 		// handle error
 		fmt.Println("Could not create resp2.")
 	}
-	fmt.Printf("response %s", awsutil.StringValue(resp2))
+	fmt.Printf("Successful file upload to s3 - response %s", awsutil.StringValue(resp2))
 
 }
